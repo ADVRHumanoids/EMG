@@ -18,6 +18,7 @@
 */
 
 #include <EMG_plugin.h>
+#define PORT 41001
 
 /* Specify that the class XBotPlugin::EMG is a XBot RT plugin with name "EMG" */
 REGISTER_XBOT_PLUGIN_(XBotPlugin::EMG)
@@ -40,6 +41,26 @@ bool EMG::init_control_plugin(XBot::Handle::Ptr handle)
 
     _logger = XBot::MatLogger::getLogger("/tmp/EMG_log");
 
+    int argc = 1;
+    const char *arg = "dummy_arg";
+    char* argg = const_cast<char*>(arg);
+    char** argv = &argg;
+     // ROS init
+    ros::init(argc, argv, "EMG");    
+    _nh = std::make_shared<ros::NodeHandle>();     
+    _pubEMG = _nh->advertise<std_msgs::Float32>("/emg_value", 1);    
+    
+    /* create a UDP socket */ 
+    if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) { perror("cannot create socket\n"); return false; }
+    /* bind the socket to any valid IP address and a specific port */ 
+    memset((char *)&myaddr, 0, sizeof(myaddr)); 
+    myaddr.sin_family = AF_INET; 
+    myaddr.sin_addr.s_addr = inet_addr("10.255.32.103");// htonl(INADDR_ANY); 
+    myaddr.sin_port = htons(PORT); 
+    if (bind(fd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0) { perror("bind failed"); return false; }
+
+    std::cout<<"waiting on port"<< PORT << std::endl;
+    
     return true;
 
 
@@ -90,6 +111,14 @@ void EMG::control_loop(double time, double period)
             /* Handle command */
         }
 
+    }
+       
+    recvlen = recvfrom(fd, &value, sizeof(float), 0, (struct sockaddr *)&remaddr, &addrlen); 
+    if (recvlen > 0) {
+      std::cout<<"received message: "<< value <<std::endl;  
+      std_msgs::Float32 emgMsg;
+      emgMsg.data= value ;   
+      _pubEMG.publish(emgMsg);      
     }
 
 }

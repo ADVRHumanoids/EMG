@@ -21,7 +21,11 @@
 #define EMG_PLUGIN_H_
 
 #include <XCM/XBotControlPlugin.h>
-
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <ros/ros.h>
+#include <std_msgs/Float32.h>
 
 namespace XBotPlugin {
 
@@ -43,7 +47,7 @@ public:
     virtual void on_stop(double time);
     
     virtual ~EMG();
-
+    
 protected:
 
     virtual void control_loop(double time, double period);
@@ -52,11 +56,19 @@ private:
 
     XBot::RobotInterface::Ptr _robot;
 
+    ros::Publisher _pubEMG;
+    std::shared_ptr<ros::NodeHandle> _nh;
     double _start_time;
 
     Eigen::VectorXd _q0;
 
     XBot::MatLogger::Ptr _logger;
+    struct sockaddr_in myaddr; /* our address */ 
+    struct sockaddr_in remaddr; /* remote address */ 
+    socklen_t addrlen = sizeof(remaddr); /* length of addresses */ 
+    int recvlen; /* # bytes received */ 
+    int fd; /* our socket */ 
+    float value;
 
 };
 
