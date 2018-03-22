@@ -68,9 +68,10 @@ private:
     socklen_t addrlen = sizeof(remaddr); /* length of addresses */ 
     int recvlen; /* # bytes received */ 
     int fd; /* our socket */ 
-    float value, max_val;
+    float value[2], max_val[2];
     int count;
     int state;
+    int index;
 
 };
 

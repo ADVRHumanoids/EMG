@@ -21,6 +21,7 @@
 #include <fstream>
 #include <EMG_plugin.h>
 #define PORT 41001
+#define nchannel 2
 
 /* Specify that the class XBotPlugin::EMG is a XBot RT plugin with name "EMG" */
 REGISTER_XBOT_PLUGIN_(XBotPlugin::EMG)
@@ -57,7 +58,7 @@ bool EMG::init_control_plugin(XBot::Handle::Ptr handle)
     /* bind the socket to any valid IP address and a specific port */ 
     memset((char *)&myaddr, 0, sizeof(myaddr)); 
     myaddr.sin_family = AF_INET; 
-    myaddr.sin_addr.s_addr = inet_addr("10.255.32.103");// htonl(INADDR_ANY); 
+    myaddr.sin_addr.s_addr = inet_addr("10.255.32.70");// htonl(INADDR_ANY); 
     myaddr.sin_port = htons(PORT); 
     if (bind(fd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0) { perror("bind failed"); return false; }
 
@@ -80,9 +81,10 @@ void EMG::on_start(double time)
 
     /* Save the robot starting config to a class member */
     _start_time = time;
-    max_val = 0.0;
+    max_val[0] = max_val[1] = 0.0;
     count = 0;
     state = 2;
+    index = 0;
     
     std::cout<<"Commands: Run, Stop, Calibrate, Load"<<std::endl;
 }
@@ -112,11 +114,14 @@ void EMG::control_loop(double time, double period)
 
         if(current_command.str() == "Run"){
             state = 0;
-            std::cout<<"USING MAX_VAL "<<max_val<<std::endl;
+	    for (int i = 0; i< nchannel ; i++){ 
+	      std::cout<<"USING MAX_VAL channel "<<i<<" is "<<max_val[i]<<std::endl;
+	    }
         }
 
         if(current_command.str() == "Calibrate"){
             state = 1;
+	    std::cout<<"CALIBRATION... "<<std::endl;  
         }
         
         if(current_command.str() == "Stop"){
@@ -125,49 +130,54 @@ void EMG::control_loop(double time, double period)
         
         if(current_command.str() == "Load"){
             state = 3;
-            std::ifstream myReadFile;
-            myReadFile.open("max_val.txt");
-            char output[100];
-            if (myReadFile.is_open()) {
-            while (!myReadFile.eof()) {
-              myReadFile >> output;
-              float ftemp = atof(output);
-              max_val = ftemp;
-              std::cout<<output;
-            }
-        }
+	    int i = 0;
+	    std::ifstream input( "max_val.txt" );
+	    for( std::string line; std::getline( input, line ); )
+	    {
+	      float ftemp = std::stof(line);
+              max_val[i] = ftemp;
+	      i++;
+              std::cout<<"Loaded "<<ftemp<<std::endl;
+	    }
+	    state =  2;
+	    input.close();
         }
 
     }
         
     if (state == 2) return;
     
-    if(state == 3){
-     
-      //load file
-      
-      
-    }    
-    else if( state == 1){
+ 
+    if( state == 1){
       count++;   
-      recvlen = recvfrom(fd, &value, sizeof(float), 0, (struct sockaddr *)&remaddr, &addrlen); 
+      recvlen = recvfrom(fd, value, sizeof(float)*2, 0, (struct sockaddr *)&remaddr, &addrlen); 
       if (recvlen > 0) {      
-          std::cout<<"CALIBRATION... "<<std::endl;  
-          std::cout<<"received message: "<< value <<std::endl;  
-          if(count <= 100){
-            if(value > max_val){
-                max_val = value;    
-              }
-            }else{
-              std::cout<<"Calibration done.. Max Val is "<< max_val <<std::endl;
-              //save on file
-              std::ofstream myfile;
-              myfile.open ("max_val.txt");
-              myfile << max_val;
-              myfile.close();
-              count = 0;
-              state = 2;
-            }
+	if(index == nchannel){
+	    std::ofstream myfile;
+	    myfile.open ("max_val.txt");
+	    for(int i =0; i< nchannel; i++){
+	      std::cout<<"Calibration fully done.. Sensor "<<i << " Max Val is "<< max_val[i] <<std::endl;
+	      //save on file
+	      myfile << max_val[i]<<std::endl;
+	    }
+	   myfile.close();
+	   count = 0;
+	   state = 2;
+	   return;
+           }
+	std::cout<<"received message channel  "<<index<<" val "<< value[index] <<std::endl;   
+	if(count <= 2000){
+	  if(value[index] > max_val[index]){
+	      max_val[index] = value[index];    
+	    }
+	  }else{
+	    std::cout<<"CALIBRATION done sensor "<<index<<std::endl; 
+	    if( index < nchannel-1)
+	      sleep(5);
+	    count = 0;
+	    index++;
+	  }
+            
         }
     }
     else if( state == 0){  
@@ -175,7 +185,7 @@ void EMG::control_loop(double time, double period)
       if (recvlen > 0) {      
           //std::cout<<"received message: "<< value <<std::endl;      
           float n_val=0.0;
-          n_val = value/max_val;
+          n_val = value[0]/max_val[0] + value[1]/max_val[1];
           std_msgs::Float32 emgMsg;
           emgMsg.data= n_val;   
           _pubEMG.publish(emgMsg);
