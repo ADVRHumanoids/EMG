@@ -17,6 +17,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>
 */
 
+#include <iostream>
+#include <fstream>
 #include <EMG_plugin.h>
 #define PORT 41001
 
@@ -78,6 +80,11 @@ void EMG::on_start(double time)
 
     /* Save the robot starting config to a class member */
     _start_time = time;
+    max_val = 0.0;
+    count = 0;
+    state = 2;
+    
+    std::cout<<"Commands: Run, Stop, Calibrate, Load"<<std::endl;
 }
 
 void EMG::on_stop(double time)
@@ -103,24 +110,78 @@ void EMG::control_loop(double time, double period)
 
     if(!current_command.str().empty()){
 
-        if(current_command.str() == "MY_COMMAND_1"){
-            /* Handle command */
+        if(current_command.str() == "Run"){
+            state = 0;
+            std::cout<<"USING MAX_VAL "<<max_val<<std::endl;
         }
 
-        if(current_command.str() == "MY_COMMAND_2"){
-            /* Handle command */
+        if(current_command.str() == "Calibrate"){
+            state = 1;
+        }
+        
+        if(current_command.str() == "Stop"){
+            state = 2;
+        }
+        
+        if(current_command.str() == "Load"){
+            state = 3;
+            std::ifstream myReadFile;
+            myReadFile.open("max_val.txt");
+            char output[100];
+            if (myReadFile.is_open()) {
+            while (!myReadFile.eof()) {
+              myReadFile >> output;
+              float ftemp = atof(output);
+              max_val = ftemp;
+              std::cout<<output;
+            }
+        }
         }
 
     }
-       
-    recvlen = recvfrom(fd, &value, sizeof(float), 0, (struct sockaddr *)&remaddr, &addrlen); 
-    if (recvlen > 0) {
-      std::cout<<"received message: "<< value <<std::endl;  
-      std_msgs::Float32 emgMsg;
-      emgMsg.data= value ;   
-      _pubEMG.publish(emgMsg);      
+        
+    if (state == 2) return;
+    
+    if(state == 3){
+     
+      //load file
+      
+      
+    }    
+    else if( state == 1){
+      count++;   
+      recvlen = recvfrom(fd, &value, sizeof(float), 0, (struct sockaddr *)&remaddr, &addrlen); 
+      if (recvlen > 0) {      
+          std::cout<<"CALIBRATION... "<<std::endl;  
+          std::cout<<"received message: "<< value <<std::endl;  
+          if(count <= 100){
+            if(value > max_val){
+                max_val = value;    
+              }
+            }else{
+              std::cout<<"Calibration done.. Max Val is "<< max_val <<std::endl;
+              //save on file
+              std::ofstream myfile;
+              myfile.open ("max_val.txt");
+              myfile << max_val;
+              myfile.close();
+              count = 0;
+              state = 2;
+            }
+        }
     }
-
+    else if( state == 0){  
+      recvlen = recvfrom(fd, &value, sizeof(float), 0, (struct sockaddr *)&remaddr, &addrlen); 
+      if (recvlen > 0) {      
+          //std::cout<<"received message: "<< value <<std::endl;      
+          float n_val=0.0;
+          n_val = value/max_val;
+          std_msgs::Float32 emgMsg;
+          emgMsg.data= n_val;   
+          _pubEMG.publish(emgMsg);
+        }
+    }
+    
 }
 
 bool EMG::close()
