@@ -21,7 +21,6 @@
 #include <fstream>
 #include <EMG_plugin.h>
 #define PORT 41001
-#define nchannel 2
 
 /* Specify that the class XBotPlugin::EMG is a XBot RT plugin with name "EMG" */
 REGISTER_XBOT_PLUGIN_(XBotPlugin::EMG)
@@ -81,11 +80,12 @@ void EMG::on_start(double time)
 
     /* Save the robot starting config to a class member */
     _start_time = time;
-    max_val[0] = max_val[1] = 0.0;
+    for(int i=0; i<nchannel ; i++){
+      max_val[i] = value[i] = 0.0;
+    }
     count = 0;
     state = 2;
-    index = 0;
-    
+    index = 0;    
     std::cout<<"Commands: Run, Stop, Calibrate, Load"<<std::endl;
 }
 
@@ -150,7 +150,7 @@ void EMG::control_loop(double time, double period)
  
     if( state == 1){
       count++;   
-      recvlen = recvfrom(fd, value, sizeof(float)*2, 0, (struct sockaddr *)&remaddr, &addrlen); 
+      recvlen = recvfrom(fd, value, sizeof(float)*nchannel, 0, (struct sockaddr *)&remaddr, &addrlen); 
       if (recvlen > 0) {      
 	if(index == nchannel){
 	    std::ofstream myfile;
@@ -181,7 +181,7 @@ void EMG::control_loop(double time, double period)
         }
     }
     else if( state == 0){  
-      recvlen = recvfrom(fd, &value, sizeof(float), 0, (struct sockaddr *)&remaddr, &addrlen); 
+      recvlen = recvfrom(fd, value, sizeof(float)*nchannel, 0, (struct sockaddr *)&remaddr, &addrlen); 
       if (recvlen > 0) {      
           //std::cout<<"received message: "<< value <<std::endl;      
           float n_val=0.0;

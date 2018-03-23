@@ -26,6 +26,7 @@
 #include <arpa/inet.h>
 #include <ros/ros.h>
 #include <std_msgs/Float32.h>
+#define nchannel 2
 
 namespace XBotPlugin {
 
@@ -68,7 +69,7 @@ private:
     socklen_t addrlen = sizeof(remaddr); /* length of addresses */ 
     int recvlen; /* # bytes received */ 
     int fd; /* our socket */ 
-    float value[2], max_val[2];
+    float value[nchannel], max_val[nchannel];
     int count;
     int state;
     int index;
