@@ -189,6 +189,7 @@ void EMG::control_loop(double time, double period)
           std_msgs::Float32 emgMsg;
           emgMsg.data= n_val;   
           _pubEMG.publish(emgMsg);
+	  _logger->add("emg_value",n_val);
         }
     }
     
